@@ -1,0 +1,55 @@
+# ── Python / Backend ─────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+dist/
+build/
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+backend/venv/
+backend/.env
+backend/scratch/
+
+# ── Frontend (not needed in backend Docker image) ────────
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# ── Git & IDE ────────────────────────────────────────────
+.git/
+.gitignore
+.github/
+.agents/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Docker (prevent recursive copy) ─────────────────────
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# ── Docs, Media & Misc ──────────────────────────────────
+*.md
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.sql
+LICENSE
+skills-lock.json
+
+# ── Root-level stale files ───────────────────────────────
+orm.py
+GraphState.py
+supabase_tables_queries.sql
+Jatin_Resume_AI_Engineer.pdf

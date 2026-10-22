@@ -1,0 +1,115 @@
+name: Deploy CodeMind AI to AWS EC2
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  CONTAINER_NAME: codemind-ai
+  APP_PORT: 8000
+
+jobs:
+  # ── CI: Build & Push Docker Image to ECR ───────────────
+  Continuous-Integration:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push Docker image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPO }}
+          IMAGE_TAG: latest
+        run: |
+          IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "Building image: $IMAGE_URI"
+          docker build -t $IMAGE_URI .
+          docker push $IMAGE_URI
+
+  # ── CD: Deploy to EC2 via Self-Hosted Runner ───────────
+  Continuous-Deployment:
+    needs: Continuous-Integration
+    runs-on: self-hosted
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Pull latest Docker image from ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPO }}
+          IMAGE_TAG: latest
+        run: |
+          docker pull $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: Stop and remove old container
+        run: |
+          docker stop ${{ env.CONTAINER_NAME }} || true
+          docker rm ${{ env.CONTAINER_NAME }} || true
+
+      - name: Run new Docker container
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPO }}
+          IMAGE_TAG: latest
+        run: |
+          docker run -d \
+            --name ${{ env.CONTAINER_NAME }} \
+            --restart always \
+            -p ${{ env.APP_PORT }}:${{ env.APP_PORT }} \
+            -e ENVIRONMENT="production" \
+            -e DEBUG="false" \
+            -e PORT="${{ env.APP_PORT }}" \
+            -e HOST="0.0.0.0" \
+            -e CORS_ORIGINS='["*"]' \
+            -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+            -e SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
+            -e SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" \
+            -e SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -e GROQ_API_KEY="${{ secrets.GROQ_API_KEY }}" \
+            -e GROQ_GENERATION_MODEL="openai/gpt-oss-120b" \
+            -e GROQ_FAST_MODEL="openai/gpt-oss-20b" \
+            -e GROQ_COMPOUND_MODEL="groq/compound" \
+            -e TAVILY_API_KEY="${{ secrets.TAVILY_API_KEY }}" \
+            -e GITHUB_TOKEN="${{ secrets.GITHUB_PAT }}" \
+            -e HF_TOKEN="${{ secrets.HF_TOKEN }}" \
+            -e LANGSMITH_TRACING="true" \
+            -e LANGSMITH_ENDPOINT="https://api.smith.langchain.com" \
+            -e LANGSMITH_API_KEY="${{ secrets.LANGSMITH_API_KEY }}" \
+            -e LANGSMITH_PROJECT="${{ secrets.LANGSMITH_PROJECT }}" \
+            -e EMBEDDING_MODEL_NAME="Shuu12121/NightOwl-CodeEmbedding" \
+            -e EMBEDDING_DIMENSION="768" \
+            $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: Verify container health
+        run: |
+          echo "Waiting 30s for app startup..."
+          sleep 30
+          curl -f http://localhost:${{ env.APP_PORT }}/health || echo "WARNING: Health check failed — check container logs with: docker logs ${{ env.CONTAINER_NAME }}"
+
+      - name: Clean unused Docker images
+        run: |
+          docker image prune -f

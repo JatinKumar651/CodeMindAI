@@ -1,0 +1,31 @@
+from app.models.orm import (
+    Repository,
+    File,
+    CodeChunk,
+    Embedding,
+    ChatSession,
+    ChatMessage,
+    RetrievedChunk,
+    Scan,
+    Evaluation,
+    BenchmarkQA,
+    Dependency,
+    AuditLog,
+    PendingReview,
+)
+
+__all__ = [
+    "Repository",
+    "File",
+    "CodeChunk",
+    "Embedding",
+    "ChatSession",
+    "ChatMessage",
+    "RetrievedChunk",
+    "Scan",
+    "Evaluation",
+    "BenchmarkQA",
+    "Dependency",
+    "AuditLog",
+    "PendingReview",
+]
